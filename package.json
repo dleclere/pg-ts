@@ -20,7 +20,7 @@
   "dependencies": {
     "fp-ts": "1.8.0",
     "io-ts": "1.3.0",
-    "lodash": "4.17.11",
+    "lodash": "^4.17.15",
     "monocle-ts": "1.2.0",
     "pg": "7.4.3"
   },
@@ -28,7 +28,7 @@
     "@types/jest": "23.3.9",
     "@types/lodash": "4.14.118",
     "@types/pg": "7.4.11",
-    "jest": "23.6.0",
+    "jest": "^25.0.0",
     "pg-connection-string": "2.0.0",
     "prettier": "1.15.2",
     "ts-jest": "23.10.4",
