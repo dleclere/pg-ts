@@ -73,6 +73,4 @@ export interface TransactionOptions {
 export type TypeParser<T> = (val: string) => T;
 export type TypeParsers = Record<string, TypeParser<any>>;
 
-export const connectionLens = Lens.fromProp<ConnectedEnvironment, ConnectionSymbol>(
-  ConnectionSymbol,
-);
+export const connectionLens = Lens.fromProp<ConnectedEnvironment>()(ConnectionSymbol);

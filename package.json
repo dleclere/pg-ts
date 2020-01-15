@@ -1,6 +1,6 @@
 {
-  "name": "pg-ts",
-  "version": "9.0.3",
+  "name": "pg-ts-v2",
+  "version": "10.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "module": "src/index.ts",
@@ -8,33 +8,33 @@
   "author": "Music Glue",
   "license": "MIT",
   "scripts": {
-    "build": "npm run clean && npm run compile && mv ./build/src ./dist && rm -rf ./build",
+    "build": "npm run clean && npm run format && npm run compile && mv ./build/src ./dist && rm -rf ./build",
     "clean": "rm -rf ./{build,dist}",
     "compile": "NODE_ENV=production tsc -p .",
-    "format": "npm run lint && npm run prettier && npm run lint",
+    "format": "npm run lint && npm run pretty && npm run lint",
     "lint": "tslint -c tslint.json -p tsconfig.json --fix '{src,tests}/**/*.{ts,tsx}'",
     "pretty": "prettier --write --list-different --parser ${npm_package_prettier_parser} --trailing-comma ${npm_package_prettier_trailingComma} --print-width ${npm_package_prettier_printWidth} '{src,tests}/**/*.ts'",
     "prepublishOnly": "npm run build",
     "test": "NODE_ENV=test jest --runInBand"
   },
   "dependencies": {
-    "fp-ts": "1.8.0",
-    "io-ts": "1.3.0",
+    "fp-ts": "2.4.0",
+    "io-ts": "2.0.4",
     "lodash": "^4.17.15",
-    "monocle-ts": "1.2.0",
-    "pg": "7.4.3"
+    "monocle-ts": "2.0.1",
+    "pg": "7.17.1"
   },
   "devDependencies": {
-    "@types/jest": "23.3.9",
-    "@types/lodash": "4.14.118",
-    "@types/pg": "7.4.11",
+    "@types/jest": "24.0.25",
+    "@types/lodash": "4.14.149",
+    "@types/pg": "7.14.1",
     "jest": "^25.0.0",
-    "pg-connection-string": "2.0.0",
-    "prettier": "1.15.2",
-    "ts-jest": "23.10.4",
-    "ts-node": "7.0.1",
-    "tslint": "5.11.0",
-    "typescript": "3.1.6"
+    "pg-connection-string": "2.1.0",
+    "prettier": "1.19.1",
+    "ts-jest": "24.3.0",
+    "ts-node": "8.6.1",
+    "tslint": "5.20.1",
+    "typescript": "3.7.4"
   },
   "jest": {
     "collectCoverage": true,

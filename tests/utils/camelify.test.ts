@@ -18,7 +18,10 @@ describe("Utils", () => {
       });
 
       it("does not alter nested array keys", () => {
-        const candidate = [["beep", ["boop"]], ["this", "that"]];
+        const candidate = [
+          ["beep", ["boop"]],
+          ["this", "that"],
+        ];
         expect(camelify(candidate)).toEqual(candidate);
       });
 

@@ -1,13 +1,22 @@
-import { Either } from "fp-ts/lib/Either";
-import { constant, identity } from "fp-ts/lib/function";
-import { ask, fromTaskEither, ReaderTaskEither } from "fp-ts/lib/ReaderTaskEither";
-import { fromEither, TaskEither, tryCatch } from "fp-ts/lib/TaskEither";
+import { Either, fold } from "fp-ts/lib/Either";
+import { constant } from "fp-ts/lib/function";
+import { pipe } from "fp-ts/lib/pipeable";
+import {
+  ask,
+  chain as chainRTE,
+  fromTaskEither,
+  map,
+  ReaderTaskEither,
+} from "fp-ts/lib/ReaderTaskEither";
+import { chain, fromEither, TaskEither, tryCatch } from "fp-ts/lib/TaskEither";
 import { mixed } from "io-ts";
 import {
   isDriverQueryError,
   isTransactionRollbackError,
   makeUnhandledConnectionError,
+  PgDriverQueryError,
   PgTransactionRollbackError,
+  PgUnhandledConnectionError,
 } from "./errors";
 import {
   ConnectedEnvironment,
@@ -26,19 +35,24 @@ export const defaultTxOptions: TransactionOptions = {
   readOnly: false,
 };
 
-const beginTransactionQuery = ({ deferrable, isolation, readOnly }: TransactionOptions) => SQL`
+const beginTransactionQuery = ({
+  deferrable,
+  isolation,
+  readOnly,
+}: TransactionOptions): ReturnType<typeof SQL> => SQL`
   BEGIN TRANSACTION
   ISOLATION LEVEL ${() => isolation}
   ${() => (readOnly ? "READ ONLY" : "")}
   ${() => (deferrable ? "DEFERRABLE" : "")}
 `;
 
-const rollbackTransaction = (connection: Connection, context: mixed) => <L>(err: L) =>
+const rollbackTransaction = (connection: Connection, context: mixed) => <L>(
+  err: L,
+): TaskEither<L | PgTransactionRollbackError, never> =>
   tryCatch(
     () =>
       connection
-        .query(SQL`ROLLBACK;`, context)
-        .run()
+        .query(SQL`ROLLBACK;`, context)()
         .then(eitherToPromise)
         .catch(rollbackErr =>
           Promise.reject(new PgTransactionRollbackError(rollbackErr, err, context)),
@@ -47,12 +61,13 @@ const rollbackTransaction = (connection: Connection, context: mixed) => <L>(err:
     e => (isTransactionRollbackError(e) ? e : (e as L)),
   );
 
-const commitTransaction = (connection: Connection, context: mixed) => <A>(a: A) =>
+const commitTransaction = (connection: Connection, context: mixed) => <A>(
+  a: A,
+): TaskEither<PgDriverQueryError | PgUnhandledConnectionError, A> =>
   tryCatch(
     () =>
       connection
-        .query(SQL`COMMIT;`, context)
-        .run()
+        .query(SQL`COMMIT;`, context)()
         .then(eitherToPromise)
         .then(constant(a)),
     e => (isDriverQueryError(e) ? e : makeUnhandledConnectionError(e)),
@@ -62,25 +77,22 @@ const executeTransaction = <L, A>(
   connection: Connection,
   opts: TransactionOptions,
   program: () => Promise<Either<L, A>>,
-): TaskEither<TransactionError<L>, A> =>
-  connection
-    .query(beginTransactionQuery(opts), opts.context)
-    .mapLeft<TransactionError<L>>(identity)
-    .chain(() =>
-      tryCatch(
-        () =>
-          program().then(programE =>
-            programE
-              .fold<TaskEither<TransactionError<L>, A>>(
-                rollbackTransaction(connection, opts.context),
-                commitTransaction(connection, opts.context),
-              )
-              .run(),
-          ),
-        makeUnhandledConnectionError,
-      ),
-    )
-    .chain(fromEither);
+): TaskEither<TransactionError<L>, A> => {
+  const runner = () =>
+    program().then(programE =>
+      fold<TransactionError<L>, A, TaskEither<TransactionError<L>, A>>(
+        rollbackTransaction(connection, opts.context),
+        commitTransaction(connection, opts.context),
+      )(programE)(),
+    );
+  const fromAsync = () => tryCatch(runner, makeUnhandledConnectionError);
+  const p = pipe(
+    connection.query(beginTransactionQuery(opts), opts.context),
+    chain<TransactionError<L>, any, Either<TransactionError<L>, A>>(fromAsync),
+    chain(fromEither),
+  );
+  return p;
+};
 
 export function withTransaction<E, L, A>(
   x: Partial<TransactionOptions>,
@@ -96,7 +108,10 @@ export function withTransaction<E, L, A>(
   const opts: TransactionOptions = y ? { ...defaultTxOptions, ...x } : defaultTxOptions;
   const program: ReaderTaskEither<E & ConnectedEnvironment, L, A> = y || x;
 
-  return ask<E & ConnectedEnvironment, TransactionError<L>>()
-    .map(e => executeTransaction(connectionLens.get(e), opts, () => program.run(e)))
-    .chain(fromTaskEither);
+  const c = chainRTE(fromTaskEither);
+  return pipe(
+    ask<E & ConnectedEnvironment, TransactionError<L>>(),
+    map(e => executeTransaction(connectionLens.get(e), opts, program(e))),
+    c,
+  );
 }

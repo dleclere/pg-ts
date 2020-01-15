@@ -1,7 +1,6 @@
-import { NonEmptyArray } from "fp-ts/lib/NonEmptyArray";
-import { None, Some } from "fp-ts/lib/Option";
+import { isNone, isSome } from "fp-ts/lib/Option";
 import { mixed } from "io-ts";
-import { forOwn, isPlainObject, isEqual } from "lodash";
+import { forOwn, isEqual, isPlainObject } from "lodash";
 import * as pg from "pg";
 
 const normaliseValue = (value: any): any => {
@@ -9,12 +8,12 @@ const normaliseValue = (value: any): any => {
     return value;
   }
 
-  if (value instanceof NonEmptyArray) {
-    return normaliseValue(value.toArray());
+  if (isNone(value)) {
+    return normaliseValue(undefined);
   }
 
-  if (value instanceof None || value instanceof Some) {
-    return normaliseValue(value.toUndefined());
+  if (isSome(value)) {
+    return normaliseValue(value.value);
   }
 
   if (Array.isArray(value)) {

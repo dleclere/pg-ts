@@ -1,14 +1,23 @@
-import { Either, left, right } from "fp-ts/lib/Either";
-import { compose, identity } from "fp-ts/lib/function";
-import { tryCatch as ioTryCatch } from "fp-ts/lib/IOEither";
-import { fromNullable } from "fp-ts/lib/Option";
-import { ask, fromTaskEither, ReaderTaskEither } from "fp-ts/lib/ReaderTaskEither";
+import { Either } from "fp-ts/lib/Either";
+import { flow } from "fp-ts/lib/function";
+import { mapLeft as mapLeftIOE, tryCatch as ioTryCatch } from "fp-ts/lib/IOEither";
+import { fromNullable, getOrElse as getOrElseO, map as mapO } from "fp-ts/lib/Option";
+import { pipe } from "fp-ts/lib/pipeable";
 import {
+  ask,
+  chain as chainRTE,
+  fromTaskEither,
+  ReaderTaskEither,
+} from "fp-ts/lib/ReaderTaskEither";
+import {
+  chain as chainTE,
   fromEither,
   fromIOEither,
+  map as mapTE,
+  mapLeft as mapLeftTE,
   TaskEither,
   taskEither,
-  tryCatch as taskEitherTryCatch,
+  tryCatch as tryCatchTE,
 } from "fp-ts/lib/TaskEither";
 import * as pg from "pg";
 import { wrapPoolClient } from "./connection";
@@ -39,87 +48,93 @@ export const makeConnectionPool = (
 ): TaskEither<PgPoolCreationError | PgTypeParserSetupError, ConnectionPool> => {
   const { onError, parsers } = poolConfig;
 
-  const poolIo = ioTryCatch(() => {
-    const pool = new pg.Pool(poolConfig);
+  const poolIo = mapLeftIOE(error =>
+    isPoolCreationError(error) ? error : makePoolCreationError(error),
+  )(
+    ioTryCatch(() => {
+      const pool = new pg.Pool(poolConfig);
 
-    pool.on(
-      "error",
-      compose(
-        onError,
-        makeUnhandledPoolError,
-      ),
-    );
+      pool.on("error", flow(makeUnhandledPoolError, onError));
 
-    return pool;
-  }, makePoolCreationError).mapLeft(
-    error => (isPoolCreationError(error) ? error : makePoolCreationError(error)),
+      return pool;
+    }, makePoolCreationError),
   );
 
-  return fromIOEither(poolIo)
-    .mapLeft<PgPoolCreationError | PgTypeParserSetupError>(identity)
-    .chain(pool =>
-      fromNullable(parsers)
-        .map(setupParsers(pool))
-        .getOrElse(taskEither.of<PgTypeParserSetupError, pg.Pool>(pool)),
-    )
-    .map(wrapConnectionPool);
+  const setup = (
+    pool: pg.Pool,
+  ): TaskEither<PgPoolCreationError | PgTypeParserSetupError, pg.Pool> => {
+    return pipe(
+      fromNullable(parsers),
+      mapO(setupParsers(pool)),
+      getOrElseO(() => taskEither.of<PgTypeParserSetupError, pg.Pool>(pool)),
+    );
+  };
+
+  return pipe(fromIOEither(poolIo), chainTE(setup), mapTE(wrapConnectionPool));
 };
 
 const checkoutConnection = (pool: pg.Pool) =>
-  taskEitherTryCatch(() => pool.connect(), makePoolCheckoutError);
+  tryCatchTE(() => pool.connect(), makePoolCheckoutError);
 
 const executeProgramWithConnection = <E extends {}, L, A>(
   environment: E,
   program: ReaderTaskEither<E & ConnectedEnvironment, L, A>,
-) => (connection: Connection): TaskEither<PgUnhandledConnectionError | L, A> =>
-  new TaskEither(
-    taskEitherTryCatch(
-      () => program.run(Object.assign({}, environment, { [ConnectionSymbol]: connection })),
+) => (connection: Connection): TaskEither<PgUnhandledConnectionError | L, A> => {
+  return pipe(
+    tryCatchTE(
+      program(Object.assign({}, environment, { [ConnectionSymbol]: connection })),
       makeUnhandledConnectionError,
-    )
-      .mapLeft<PgUnhandledConnectionError | L>(identity)
-      .chain(fromEither)
-      .fold<Either<PgUnhandledConnectionError | L, A>>(
-        err => {
-          // If a rollback error reaches this point, we should assume the connection
-          // is poisoned and ask the pool implementation to dispose of it.
-          connection.release(isTransactionRollbackError(err) ? err : undefined);
-          return left(err);
-        },
-        a => {
-          connection.release();
-          return right(a);
-        },
-      ),
+    ),
+    chainTE<PgUnhandledConnectionError | L, Either<L, A>, A>(fromEither),
+    mapLeftTE((err: PgUnhandledConnectionError | L) => {
+      // If a rollback error reaches this point, we should assume the connection
+      // is poisoned and ask the pool implementation to dispose of it.
+      connection.release(isTransactionRollbackError(err) ? err : undefined);
+      return err;
+    }),
+    mapTE((a: A) => {
+      connection.release();
+      return a;
+    }),
   );
+};
 
 const withConnectionFromPool = (pool: pg.Pool) => <L, A>(
   program: ReaderTaskEither<ConnectedEnvironment, L, A>,
 ) =>
-  checkoutConnection(pool)
-    .map(wrapPoolClient)
-    .mapLeft<ConnectionError<L>>(identity)
-    .chain(executeProgramWithConnection({}, program));
+  pipe(
+    checkoutConnection(pool),
+    mapTE(wrapPoolClient),
+    chainTE<ConnectionError<L>, Connection, A>(executeProgramWithConnection({}, program)),
+  );
 
 const withConnectionEFromPool = (pool: pg.Pool) => <E extends {}, L, A>(
   program: ReaderTaskEither<E & ConnectedEnvironment, L, A>,
-) =>
-  ask<E, ConnectionError<L>>()
-    .map(environment =>
-      checkoutConnection(pool)
-        .map(wrapPoolClient)
-        .mapLeft<ConnectionError<L>>(identity)
-        .chain(executeProgramWithConnection(environment, program)),
-    )
-    .chain(fromTaskEither);
+): ReaderTaskEither<E, ConnectionError<L>, A> => {
+  return pipe(
+    ask<E, ConnectionError<L>>(),
+    chainRTE((environment: E) => {
+      const a2 = pipe(
+        checkoutConnection(pool),
+        mapTE(wrapPoolClient),
+        chainTE<ConnectionError<L>, Connection, A>(
+          executeProgramWithConnection(environment, program),
+        ),
+      );
+      return fromTaskEither<E, ConnectionError<L>, A>(a2);
+    }),
+  );
+};
 
-export const wrapConnectionPool = (pool: pg.Pool): ConnectionPool => ({
-  end: () =>
-    taskEitherTryCatch(
-      () => ((pool as any).ending ? Promise.resolve<void>(undefined) : pool.end()),
-      makePoolShutdownError,
-    ),
+export const wrapConnectionPool = (pool: pg.Pool): ConnectionPool => {
+  return {
+    end: () =>
+      tryCatchTE(
+        () => ((pool as any).ending ? Promise.resolve<void>(undefined) : pool.end()),
+        makePoolShutdownError,
+      ),
 
-  withConnection: withConnectionFromPool(pool),
-  withConnectionE: withConnectionEFromPool(pool),
-});
+    withConnection: withConnectionFromPool(pool),
+    withConnectionE: withConnectionEFromPool(pool),
+  };
+};

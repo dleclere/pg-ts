@@ -7,9 +7,9 @@ Typescript wrapper around node-postgres
 :wrench: chore
 :notebook: docs
 
-#### vNext
+#### v10.0.0
 
-- :wrench: Dependency updates
+- :boom: Move to fp-ts version 2
 
 #### v9.0.3
 - :wrench: improve PgDriverQueryError message

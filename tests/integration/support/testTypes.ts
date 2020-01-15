@@ -1,11 +1,11 @@
-import { Either, left, right } from "fp-ts/lib/Either";
-import { identity } from "fp-ts/lib/function";
-import { ReaderTaskEither } from "fp-ts/lib/ReaderTaskEither";
-import { Task } from "fp-ts/lib/Task";
-import { TaskEither } from "fp-ts/lib/TaskEither";
+import { Either } from "fp-ts/lib/Either";
+import { pipe } from "fp-ts/lib/pipeable";
+import { chain as chainRTE, ReaderTaskEither } from "fp-ts/lib/ReaderTaskEither";
+import { chain, fold, left, right } from "fp-ts/lib/TaskEither";
 import {
   camelCasedQueries,
   ConnectedEnvironment,
+  ConnectionPool,
   makeConnectionPool,
   PgPoolCheckoutError,
   PgPoolCreationError,
@@ -36,7 +36,11 @@ export const connectionTest = <L, A>(
     SQL`INSERT INTO units (id, name) VALUES (1, 'Car'), (2, 'Bike'), (3, 'Motorbike'), (4, 'Car');`,
   );
 
-  const prepareDb = createTable.chain(() => truncate("units")).chain(() => insertUnits);
+  const prepareDb = pipe(
+    createTable,
+    chainRTE(() => truncate("units")),
+    chainRTE(() => insertUnits),
+  );
 
   type ProgramError =
     | PgPoolCheckoutError
@@ -46,20 +50,34 @@ export const connectionTest = <L, A>(
     | QueryNoneError
     | L;
 
-  return makeConnectionPool(getPoolConfig(connectionString))
-    .mapLeft<ProgramError>(identity)
-    .chain(
-      pool =>
-        new TaskEither(
-          pool
-            .withConnection(prepareDb.mapLeft<ProgramError>(identity).chain(() => program))
-            .fold<Task<Either<ProgramError, A>>>(
-              l => pool.end().fold(() => left(l), () => left(l)),
-              r => pool.end().fold(() => right(r), () => right(r)),
-            )
-            .chain(identity),
+  return pipe(
+    makeConnectionPool(getPoolConfig(connectionString)),
+    chain((pool: ConnectionPool) => {
+      const pp = pool.withConnection(
+        pipe(
+          prepareDb,
+          chainRTE<ConnectedEnvironment, ProgramError, unknown, A>(() => program),
         ),
-    )
-    .run()
-    .then(eitherToPromise);
+      );
+      return pipe(
+        pp,
+        fold<ProgramError, A, Either<ProgramError, A>>(
+          err => {
+            const f = fold(
+              () => left(err),
+              () => left(err),
+            );
+            return pipe(pool.end(), f);
+          },
+          result => {
+            const f = fold(
+              () => right(result),
+              () => right(result),
+            );
+            return pipe(pool.end(), f);
+          },
+        ),
+      );
+    }),
+  )().then(eitherToPromise) as Promise<A>;
 };

@@ -62,33 +62,30 @@ const parse = (raw: string): PGIntervalObject<number> | null => {
 
   const isNegative = matches[NEGATION_INDEX] === NEGATION_INDICATOR;
 
-  return Object.keys(positionLookup).reduce(
-    (acc, prop: string) => {
-      const position = positionLookup[prop];
+  return Object.keys(positionLookup).reduce((acc, prop: string) => {
+    const position = positionLookup[prop];
 
-      if (!position) {
-        return acc;
-      }
+    if (!position) {
+      return acc;
+    }
 
-      const value = matches[position];
+    const value = matches[position];
 
-      if (!value) {
-        return acc;
-      }
+    if (!value) {
+      return acc;
+    }
 
-      const parsed = String(prop) === "milliseconds" ? parseSubseconds(value) : parseInt(value, 10);
+    const parsed = String(prop) === "milliseconds" ? parseSubseconds(value) : parseInt(value, 10);
 
-      if (!parsed) {
-        return acc;
-      }
+    if (!parsed) {
+      return acc;
+    }
 
-      return {
-        ...acc,
-        [prop]: isNegative && timeProps.includes(prop) ? parsed * -1 : parsed,
-      };
-    },
-    {} as PGIntervalObject<number>,
-  );
+    return {
+      ...acc,
+      [prop]: isNegative && timeProps.includes(prop) ? parsed * -1 : parsed,
+    };
+  }, {} as PGIntervalObject<number>);
 };
 
 const formatMilliseconds = (raw: number): string => String(raw * 1000).replace(/[0]+$/g, "");
