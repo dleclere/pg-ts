@@ -39,7 +39,12 @@ type IndexGetter = (value: mixed) => string;
 export const SQLFragment = (parts: TemplateStringsArray, ...inValues: mixed[]) => (
   getValueIndex: IndexGetter,
 ): string =>
-  parts.reduce((prev, curr, valIdx) => `${prev}${getValueIndex(inValues[valIdx - 1])}${curr}`);
+  parts.reduce((prev, curr, valIdx) => {
+    const value = inValues[valIdx - 1];
+    return typeof value === "function"
+      ? `${prev}${value(getValueIndex)}${curr}`
+      : `${prev}${getValueIndex(value)}${curr}`;
+  });
 
 export const SQL = (parts: TemplateStringsArray, ...inValues: any[]): pg.QueryConfig => {
   const outValues: mixed[] = [];
