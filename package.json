@@ -1,11 +1,11 @@
 {
   "name": "pg-ts-v2",
-  "version": "10.0.0",
+  "version": "1.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "module": "src/index.ts",
-  "repository": "https://github.com/musicglue/pg-ts",
-  "author": "Music Glue",
+  "repository": "https://github.com/ivivona/pg-ts",
+  "author": "Ignacio Vivona",
   "license": "MIT",
   "scripts": {
     "build": "npm run clean && npm run format && npm run compile && mv ./build/src ./dist && rm -rf ./build",
@@ -18,23 +18,23 @@
     "test": "NODE_ENV=test jest --runInBand"
   },
   "dependencies": {
-    "fp-ts": "2.4.0",
-    "io-ts": "2.0.4",
+    "fp-ts": "2.4.3",
+    "io-ts": "2.0.6",
     "lodash": "^4.17.15",
-    "monocle-ts": "2.0.1",
-    "pg": "7.17.1"
+    "monocle-ts": "2.1.0",
+    "pg": "7.18.1"
   },
   "devDependencies": {
-    "@types/jest": "24.0.25",
+    "@types/jest": "25.1.1",
     "@types/lodash": "4.14.149",
     "@types/pg": "7.14.1",
-    "jest": "^25.0.0",
+    "jest": "^25.1.0",
     "pg-connection-string": "2.1.0",
     "prettier": "1.19.1",
-    "ts-jest": "24.3.0",
-    "ts-node": "8.6.1",
-    "tslint": "5.20.1",
-    "typescript": "3.7.4"
+    "ts-jest": "25.1.0",
+    "ts-node": "8.6.2",
+    "tslint": "6.0.0",
+    "typescript": "3.7.5"
   },
   "jest": {
     "collectCoverage": true,
