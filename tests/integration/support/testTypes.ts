@@ -1,4 +1,4 @@
-import { Either } from "fp-ts/lib/Either";
+import { Either, left as leftE } from "fp-ts/lib/Either";
 import { pipe } from "fp-ts/lib/pipeable";
 import { chain as chainRTE, ReaderTaskEither } from "fp-ts/lib/ReaderTaskEither";
 import { chain, fold, left, right } from "fp-ts/lib/TaskEither";
@@ -19,13 +19,22 @@ import { getPoolConfig, truncate } from "./db";
 
 const { queryNone } = camelCasedQueries;
 
+class EnvironmentError extends Error {
+  public name = "EnvironmentError";
+  constructor(msg: string) {
+    super(msg);
+  }
+}
+
 export const connectionTest = <L, A>(
   program: ReaderTaskEither<ConnectedEnvironment, L, A>,
 ): Promise<A> => {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable not found");
+    return eitherToPromise(
+      leftE<EnvironmentError, A>(new EnvironmentError("DATABASE_URL environment variable not found")),
+    );
   }
 
   const createTable = queryNone(
