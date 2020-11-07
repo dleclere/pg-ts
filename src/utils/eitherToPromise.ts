@@ -7,5 +7,5 @@ export const eitherToPromise = <L, R>(either: Either<L, R>): Promise<R> =>
     fold(
       l => Promise.reject<R>(l),
       r => Promise.resolve<R>(r),
-    )
+    ),
   );

@@ -33,7 +33,9 @@ export const connectionTest = <L, A>(
 
   if (!connectionString) {
     return eitherToPromise(
-      leftE<EnvironmentError, A>(new EnvironmentError("DATABASE_URL environment variable not found")),
+      leftE<EnvironmentError, A>(
+        new EnvironmentError("DATABASE_URL environment variable not found"),
+      ),
     );
   }
 

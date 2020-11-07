@@ -1,5 +1,5 @@
 {
-  "name": "pg-ts-v2",
+  "name": "pg-ts",
   "version": "1.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,16 +20,19 @@
   "dependencies": {
     "fp-ts": "2.4.3",
     "io-ts": "2.0.6",
-    "lodash": "4.17.15",
+    "lodash": "^4.17.15",
     "monocle-ts": "2.1.0",
-    "pg": "^8.2.1",
+    "pg": "8.4.2",
+    "pg-copy-streams": "^5.1.1",
     "postgres-array": "^2.0.0"
   },
   "devDependencies": {
     "@types/jest": "25.1.1",
     "@types/lodash": "4.14.149",
-    "@types/pg": "7.14.3",
-    "jest": "23.6.0",
+    "@types/node": "^14.14.3",
+    "@types/pg": "7.14.5",
+    "@types/pg-copy-streams": "^1.2.1",
+    "jest": "^25.1.0",
     "pg-connection-string": "2.1.0",
     "prettier": "1.19.1",
     "ts-jest": "25.1.0",

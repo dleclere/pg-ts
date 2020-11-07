@@ -3,6 +3,9 @@ import { TaskEither } from "fp-ts/lib/TaskEither";
 import * as t from "io-ts";
 import { Lens } from "monocle-ts";
 import * as pg from "pg";
+import { CopyStreamQuery } from "pg-copy-streams";
+import * as stream from "stream";
+import { Lazy } from "fp-ts/lib/function";
 import {
   PgDriverQueryError,
   PgPoolCheckoutError,
@@ -15,6 +18,7 @@ import {
 export interface Connection {
   query(config: pg.QueryConfig, context: t.mixed): TaskEither<PgDriverQueryError, QueryResult>;
   release(err?: Error): void;
+  copyFrom(query: CopyStreamQuery): (data: Lazy<stream.Readable>) => TaskEither<Error, undefined>;
 }
 
 export const ConnectionSymbol = Symbol("pg-ts connection");
